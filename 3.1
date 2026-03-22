@@ -1,0 +1,403 @@
+
+##### OLA 2 ########
+
+source("util_main.R")
+library(dplyr)
+library(tidyr)
+library(stringr)
+
+
+
+##### Opgave 3 ######
+
+
+# Henter Matchinfo
+
+source("util_main.R")
+
+all_matches <- getAllMatches()
+
+dim(all_matches)
+names(all_matches)
+head(all_matches)
+
+# lister med kvinder og mænd
+
+table(all_matches$home_team.home_team_gender, useNA = "ifany")
+table(all_matches$away_team.away_team_gender, useNA = "ifany")
+
+female_matches <- all_matches %>%
+  filter(home_team.home_team_gender == "female",
+         away_team.away_team_gender == "female")
+
+male_matches <- all_matches %>%
+  filter(home_team.home_team_gender == "male",
+         away_team.away_team_gender == "male")
+
+
+dim(female_matches)
+
+dim(male_matches)
+
+nrow(female_matches)
+nrow(male_matches)
+
+# trækker matchider ud
+
+f_ids <- female_matches$match_id
+m_ids <- male_matches$match_id
+
+
+# sammen antal kampe for sammenligne
+
+set.seed(123)
+
+n_use <- min(length(f_ids), length(m_ids), 200)
+
+f_ids_use <- sample(f_ids, n_use)
+m_ids_use <- sample(m_ids, n_use)
+
+
+#
+
+f_events <- getAllEventsMultipleMatches(f_ids_use[1:10], gender = "f")
+m_events <- getAllEventsMultipleMatches(m_ids_use[1:10], gender = "m")
+
+names(f_events)
+names(m_events)
+dim(f_events)
+dim(m_events)
+
+
+
+## standiserer
+
+library(dplyr)
+
+f_std <- f_events %>%
+  mutate(
+    gender = "Kvinder",
+    match_id_std = match_id,
+    event_type = `type.name`,
+    pass_outcome = `pass.outcome.name`,
+    shot_outcome = `shot.outcome.name`
+  )
+
+m_std <- m_events %>%
+  mutate(
+    gender = "Mænd",
+    match_id_std = matchId,
+    event_type = `type.name`,
+    pass_outcome = `pass.outcome.name`,
+    shot_outcome = `shot.outcome.name`
+  )
+
+events_all <- bind_rows(f_std, m_std)
+
+## Shot outcome
+
+events_all %>%
+  filter(event_type == "Shot") %>%
+  count(shot_outcome, sort = TRUE)
+
+
+
+## standiserer
+
+library(dplyr)
+
+f_std <- f_events %>%
+  mutate(
+    gender = "Kvinder",
+    match_id_std = match_id,
+    event_type = `type.name`,
+    pass_outcome = `pass.outcome.name`,
+    shot_outcome = `shot.outcome.name`
+  )
+
+m_std <- m_events %>%
+  mutate(
+    gender = "Mænd",
+    match_id_std = matchId,
+    event_type = `type.name`,
+    pass_outcome = `pass.outcome.name`,
+    shot_outcome = `shot.outcome.name`
+  )
+
+events_all <- bind_rows(f_std, m_std)
+
+## Shot outcome
+
+events_all %>%
+  filter(event_type == "Shot") %>%
+  count(shot_outcome, sort = TRUE)
+
+shots_per_match <- events_all %>%
+  filter(event_type == "Shot") %>%
+  mutate(missed_shot = if_else(shot_outcome == "Goal", 0, 1, missing = 1)) %>%
+  group_by(gender, match_id_std) %>%
+  summarise(
+    total_shots = n(),
+    missed_shots = sum(missed_shot, na.rm = TRUE),
+    missed_shot_pct = 100 * missed_shots / total_shots,
+    .groups = "drop"
+  )
+
+head(shots_per_match)
+
+
+
+
+head(passes_per_match)
+
+
+# Fejl aflveringer
+
+passes_per_match <- events_all %>%
+  filter(event_type == "Pass") %>%
+  mutate(incomplete_pass = if_else(is.na(pass_outcome), 0, 1)) %>%
+  group_by(gender, match_id_std) %>%
+  summarise(
+    total_passes = n(),
+    incomplete_passes = sum(incomplete_pass, na.rm = TRUE),
+    incomplete_pass_pct = 100 * incomplete_passes / total_passes,
+    .groups = "drop"
+  )
+
+head(passes_per_match)
+
+
+### SUMMARY #####
+
+## Fejl Afleveringer
+
+passes_summary <- passes_per_match %>%
+  group_by(gender) %>%
+  summarise(
+    kampe = n(),
+    avg_passes = mean(total_passes, na.rm = TRUE),
+    avg_incomplete = mean(incomplete_passes, na.rm = TRUE),
+    avg_incomplete_pct = mean(incomplete_pass_pct, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+passes_summary
+
+# Missede Skud
+
+shots_summary <- shots_per_match %>%
+  group_by(gender) %>%
+  summarise(
+    kampe = n(),
+    avg_shots = mean(total_shots, na.rm = TRUE),
+    avg_missed = mean(missed_shots, na.rm = TRUE),
+    avg_missed_pct = mean(missed_shot_pct, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+shots_summary
+
+
+# Samlet
+
+final_summary <- passes_per_match %>%
+  inner_join(shots_per_match, by = c("gender", "match_id_std")) %>%
+  group_by(gender) %>%
+  summarise(
+    kampe = n(),
+    passes_pr_kamp = mean(total_passes, na.rm = TRUE),
+    fejl_pass_pr_kamp = mean(incomplete_passes, na.rm = TRUE),
+    fejl_pass_pct = mean(incomplete_pass_pct, na.rm = TRUE),
+    skud_pr_kamp = mean(total_shots, na.rm = TRUE),
+    missede_skud_pr_kamp = mean(missed_shots, na.rm = TRUE),
+    missede_skud_pct = mean(missed_shot_pct, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+final_summary
+
+
+## ggplot
+
+ggplot(passes_per_match, aes(x = gender, y = incomplete_pass_pct)) +
+  geom_boxplot() +
+  labs(title = "Fejlafleveringer (%) pr kamp")
+
+
+
+# Selection bias
+
+# mænd top liga
+
+male_top <- all_matches %>%
+  filter(
+    home_team.home_team_gender == "male",
+    grepl("UEFA|Premier League", competition.competition_name)
+  )
+
+female_all <- all_matches %>%
+  filter(home_team.home_team_gender == "female")
+
+
+# variabel bias
+
+# Miscontrol
+
+miscontrol <- events_all %>%
+  filter(event_type == "Miscontrol") %>%
+  group_by(gender, match_id_std) %>%
+  summarise(miscontrols = n(), .groups = "drop")
+
+
+
+# Selection bias
+
+# mænd top liga
+
+male_top <- all_matches %>%
+  filter(
+    home_team.home_team_gender == "male",
+    grepl("UEFA|Premier League", competition.competition_name)
+  )
+
+female_all <- all_matches %>%
+  filter(home_team.home_team_gender == "female")
+
+
+# variabel bias
+
+# Miscontrol
+
+miscontrol <- events_all %>%
+  filter(event_type == "Miscontrol") %>%
+  group_by(gender, match_id_std) %>%
+  summarise(miscontrols = n(), .groups = "drop")
+
+miscontrol_summary <- miscontrol %>%
+  group_by(gender) %>%
+  summarise(
+    kampe = n(),
+    avg_miscontrol = mean(miscontrols, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+miscontrol_summary
+
+
+# per 100 events
+
+total_events <- events_all %>%
+  group_by(gender, match_id_std) %>%
+  summarise(total_events = n(), .groups = "drop")
+
+miscontrol_rel <- miscontrol %>%
+  left_join(total_events, by = c("gender", "match_id_std")) %>%
+  mutate(miscontrol_per_100 = 100 * miscontrols / total_events)
+
+# Dispossed
+
+dispossessed <- events_all %>%
+  filter(event_type == "Dispossessed") %>%
+  group_by(gender, match_id_std) %>%
+  summarise(dispossessed = n(), .groups = "drop")
+
+dispossessed_summary <- dispossessed %>%
+  group_by(gender) %>%
+  summarise(
+    kampe = n(),
+    avg_dispossessed = mean(dispossessed, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+dispossessed_summary
+
+# Shot accuracy
+
+shot_accuracy <- events_all %>%
+  filter(event_type == "Shot") %>%
+  mutate(on_target = if_else(shot_outcome %in% c("Goal", "Saved"), 1, 0)) %>%
+  group_by(gender, match_id_std) %>%
+  summarise(
+    total_shots = n(),
+    on_target = sum(on_target),
+    accuracy_pct = 100 * on_target / total_shots,
+    .groups = "drop"
+  )
+
+
+shot_accuracy_summary <- shot_accuracy %>%
+  group_by(gender) %>%
+  summarise(
+    kampe = n(),
+    avg_accuracy = mean(accuracy_pct, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+shot_accuracy_summary
+
+
+bad_shots <- events_all %>%
+  filter(event_type == "Shot") %>%
+  filter(shot_outcome %in% c("Off T", "Wayward")) %>%
+  group_by(gender, match_id_std) %>%
+  summarise(bad_shots = n(), .groups = "drop")
+
+
+events_all %>%
+  count(event_type, sort = TRUE)
+
+
+
+miscontrol_summary
+dispossessed_summary
+shot_accuracy_summary
+
+
+
+
+final_summary <- miscontrol %>%
+  left_join(dispossessed, by = c("gender", "match_id_std")) %>%
+  group_by(gender) %>%
+  summarise(
+    kampe = n(),
+    miscontrol_pr_kamp = mean(miscontrols),
+    dispossessed_pr_kamp = mean(dispossessed),
+    .groups = "drop"
+  )
+
+final_summary
+
+
+## ggplot
+
+library(ggplot2)
+
+ggplot(final_summary, aes(x = gender, y = miscontrol_pr_kamp)) +
+  geom_col() +
+  labs(
+    title = "Kvinder mister oftere bolden",
+    subtitle = "Gennemsnitlige miscontrols pr. kamp",
+    x = "",
+    y = "Miscontrols pr. kamp"
+  ) +
+  theme_minimal()
+
+library(tidyr)
+
+plot_data <- final_summary %>%
+  pivot_longer(
+    cols = c(miscontrol_pr_kamp, dispossessed_pr_kamp),
+    names_to = "metric",
+    values_to = "value"
+  )
+
+ggplot(plot_data, aes(x = gender, y = value, fill = metric)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Flere tekniske fejl i kvindefodbold",
+    subtitle = "Sammenligning af miscontrols og boldtab pr. kamp",
+    x = "",
+    y = "Antal pr. kamp",
+    fill = ""
+  ) +
+  theme_minimal()
