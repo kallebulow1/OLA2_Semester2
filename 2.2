@@ -1,0 +1,40 @@
+library(dplyr)
+library(stringr)
+library(ggplot2)
+install.packages("ggrepel")
+library(ggrepel)
+
+
+# indlæs filerne fra OLA
+csv <- read.csv("fat.csv",TRUE,",")
+rds <- readRDS("bmi.rds")
+
+# se hvilke variable der er i rds filen
+names(rds)
+
+# filtrer så vi kun har gennemsnitlig OB og life expetancy for 2015
+obesity <- rds %>% 
+  select(Country, Country.Code, AllOB, X2015)
+
+# fjerne NA værdier fra mit datasæt
+obesity_clean <- obesity %>%
+  filter(!is.na(X2015)) %>%
+  mutate(mark = ifelse(Country.Code == "DNK", "Danmark", "Andre"))
+
+# plot
+ggplot(obesity_clean, aes(x = AllOB, y = X2015, label = Country.Code)) +
+  geom_point(aes(color = Country.Code == "UKR")) +
+  geom_text_repel(size = 3) +
+  geom_text_repel(
+    data = obesity_clean %>% filter(Country.Code == "UKR"),
+    color = "red",
+    size = 4
+  ) +
+  scale_color_manual(values = c("TRUE" = "red", "FALSE" = "grey")) +
+  labs(
+    title = "Lang levetid i Tonga, på trods af høj BMI",
+    x = "Andel med BMI ≥ 30 (%)",
+    y = "Gennemsnitlig levealder (2015)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
