@@ -1,0 +1,247 @@
+library(jsonlite)
+library(dplyr)
+library(ggsoccer)
+library(ggplot2)
+library(stringr)
+source("util.R")
+
+allMatches = getAllMatches()
+
+#-------------------------------- OLA 2 - 2. semester opgave 3 -------------------------------------------- -------------------------------------------- -------------------------------------------- -------------------------------------------- --------------------------------------------
+
+# Kvinder 
+women_matches <- allMatches %>%
+  filter(competition.competition_name == "UEFA Women's Euro")
+
+women_ids <- women_matches$match_id
+
+women_events <- getAllEventsMultipleMatches(women_ids)
+
+women_events_stats <- women_events %>%
+  group_by(match_id, type.name) %>%
+  summarise(antal = n(), .groups = "drop") %>%
+  mutate(køn = "Kvinder")
+
+# Mænd
+men_events <- readRDS("mens_events.rds")
+
+men_events_stats <- men_events %>%
+  group_by(matchId, type.name) %>%
+  summarise(antal = n(), .groups = "drop") %>%
+  rename(match_id = matchId) %>%
+  mutate(køn = "Mænd")
+
+# Samler i en
+events_total <- bind_rows(women_events_stats, men_events_stats)
+
+library(dplyr)
+library(purrr)
+
+# vælg kun carries
+women_carry <- women_events %>%
+  filter(type.name == "Carry") %>%
+  mutate(
+    x_start = map_dbl(location, 1),
+    y_start = map_dbl(location, 2),
+    x_end   = map_dbl(carry.end_location, 1),
+    y_end   = map_dbl(carry.end_location, 2),
+    carry_længde = sqrt((x_end - x_start)^2 + (y_end - y_start)^2)
+  )
+
+men_carry <- men_events %>%
+  rename(match_id = matchId) %>% 
+  filter(type.name == "Carry") %>%
+  mutate(
+    x_start = map_dbl(location, 1),
+    y_start = map_dbl(location, 2),
+    x_end   = map_dbl(carry.end_location, 1),
+    y_end   = map_dbl(carry.end_location, 2),
+    carry_længde = sqrt((x_end - x_start)^2 + (y_end - y_start)^2)
+  )
+
+women_carry_stats <- women_carry %>%
+  summarise(
+    gennemsnit = mean(carry_længde, na.rm = TRUE),
+    median = median(carry_længde, na.rm = TRUE),
+    max = max(carry_længde, na.rm = TRUE),
+    sd = sd(carry_længde, na.rm = TRUE),
+    antal = n()
+  ) %>%
+  mutate(køn = "Kvinder")
+
+men_carry_stats <- men_carry %>%
+  summarise(
+    gennemsnit = mean(carry_længde, na.rm = TRUE),
+    median = median(carry_længde, na.rm = TRUE),
+    max = max(carry_længde, na.rm = TRUE),
+    sd = sd(carry_længde, na.rm = TRUE),
+    antal = n()
+  ) %>%
+  mutate(køn = "Mænd")
+
+carry_stats_total <- bind_rows(women_carry_stats, men_carry_stats)
+carry_stats_total
+
+# Kvinder: gennemsnitlig carry-længde pr. kamp
+women_match_carry <- women_carry %>%
+  group_by(match_id) %>%
+  summarise(
+    gennemsnit_carry_i_kamp = mean(carry_længde, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Mænd: gennemsnitlig carry-længde pr. kamp
+men_match_carry <- men_carry %>%
+  group_by(match_id) %>%
+  summarise(
+    gennemsnit_carry_i_kamp = mean(carry_længde, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Samlet gennemsnit af kampenes gennemsnit
+women_summary <- women_match_carry %>%
+  summarise(
+    gennemsnit_af_kampgennemsnit = mean(gennemsnit_carry_i_kamp, na.rm = TRUE),
+    median_af_kampgennemsnit = median(gennemsnit_carry_i_kamp, na.rm = TRUE),
+    sd_af_kampgennemsnit = sd(gennemsnit_carry_i_kamp, na.rm = TRUE),
+    antal_kampe = n()
+  ) %>%
+  mutate(køn = "Kvinder")
+
+men_summary <- men_match_carry %>%
+  summarise(
+    gennemsnit_af_kampgennemsnit = mean(gennemsnit_carry_i_kamp, na.rm = TRUE),
+    median_af_kampgennemsnit = median(gennemsnit_carry_i_kamp, na.rm = TRUE),
+    sd_af_kampgennemsnit = sd(gennemsnit_carry_i_kamp, na.rm = TRUE),
+    antal_kampe = n()
+  ) %>%
+  mutate(køn = "Mænd")
+
+carry_kamp_total <- bind_rows(women_summary, men_summary)
+carry_kamp_total
+
+t.test(
+  women_match_carry$gennemsnit_carry_i_kamp,
+  men_match_carry$gennemsnit_carry_i_kamp
+)
+
+women_duration_stats <- women_carry %>%
+  summarise(
+    gennemsnit_duration = mean(duration, na.rm = TRUE),
+    median_duration = median(duration, na.rm = TRUE),
+    max_duration = max(duration, na.rm = TRUE),
+    sd_duration = sd(duration, na.rm = TRUE),
+    antal = n()
+  ) %>%
+  mutate(køn = "Kvinder")
+
+men_duration_stats <- men_carry %>%
+  summarise(
+    gennemsnit_duration = mean(duration, na.rm = TRUE),
+    median_duration = median(duration, na.rm = TRUE),
+    max_duration = max(duration, na.rm = TRUE),
+    sd_duration = sd(duration, na.rm = TRUE),
+    antal = n()
+  ) %>%
+  mutate(køn = "Mænd")
+
+duration_stats_total <- bind_rows(women_duration_stats, men_duration_stats)
+duration_stats_total
+
+women_duration_kamp <- women_carry %>%
+  group_by(match_id) %>%
+  summarise(
+    gennemsnit_duration_i_kamp = mean(duration, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+men_duration_kamp <- men_carry %>%
+  group_by(match_id) %>%
+  summarise(
+    gennemsnit_duration_i_kamp = mean(duration, na.rm = TRUE),
+    .groups = "drop"
+  )
+duration_stats_pr.kamp <- bind_rows(women_duration_kamp, men_duration_kamp)
+duration_stats_pr.kamp
+
+t.test(
+  women_duration_kamp$gennemsnit_duration_i_kamp,
+  men_duration_kamp$gennemsnit_duration_i_kamp
+)
+
+women_pass_lenght_stats <- women_events %>%
+  summarise(
+    gennemsnit_pass_lenght = mean(pass.length, na.rm = TRUE),
+    median_pass_lenght = median(pass.length, na.rm = TRUE),
+    max_pass_lenght = max(pass.length, na.rm = TRUE),
+    sd_pass_lenght = sd(pass.length, na.rm = TRUE),
+    antal = n()
+  ) %>%
+  mutate(køn = "Kinder")
+
+men_pass_lenght_stats <- men_events %>%
+  summarise(
+    gennemsnit_pass_lenght = mean(pass.length, na.rm = TRUE),
+    median_pass_lenght = median(pass.length, na.rm = TRUE),
+    max_pass_lenght = max(pass.length, na.rm = TRUE),
+    sd_pass_lenght = sd(pass.length, na.rm = TRUE),
+    antal = n()
+  ) %>%
+  mutate(køn = "Mænd")
+
+pass_lenght_stats_total <- bind_rows(women_pass_lenght_stats, men_pass_lenght_stats)
+pass_lenght_stats_total
+
+women_pass <- women_events %>%
+  filter(type.name == "Pass")
+
+men_pass <- men_events %>%
+  filter(type.name == "Pass")
+
+names(women_pass)
+women_pass_length_stats_kamp <- women_pass %>%
+  group_by(matchId) %>%
+  summarise(
+    gennemsnit_pass_length_i_kamp = mean(pass.length, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(køn = "Kvinder")
+
+men_pass_length_stats_kamp <- men_pass %>%
+  rename(match_id = matchId) %>%
+  group_by(match_id) %>%
+  summarise(
+    gennemsnit_pass_length_i_kamp = mean(pass.length, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(køn = "Mænd")
+
+pass_length_pr_kamp <- bind_rows(
+  women_pass_length_stats_kamp,
+  men_pass_length_stats_kamp
+)
+
+pass_length_pr_kamp
+
+pass_length_oversigt <- pass_length_pr_kamp %>%
+  group_by(køn) %>%
+  summarise(
+    gennemsnit_af_kampgennemsnit = mean(gennemsnit_pass_length_i_kamp, na.rm = TRUE),
+    median_af_kampgennemsnit = median(gennemsnit_pass_length_i_kamp, na.rm = TRUE),
+    sd_af_kampgennemsnit = sd(gennemsnit_pass_length_i_kamp, na.rm = TRUE),
+    min_af_kampgennemsnit = min(gennemsnit_pass_length_i_kamp, na.rm = TRUE),
+    max_af_kampgennemsnit = max(gennemsnit_pass_length_i_kamp, na.rm = TRUE),
+    antal_kampe = n(),
+    .groups = "drop"
+  )
+
+pass_length_oversigt
+
+t.test(
+  women_pass_length_stats_kamp$gennemsnit_pass_length_i_kamp,
+  men_pass_length_stats_kamp$gennemsnit_pass_length_i_kamp
+)
+
+
+
+save.image("wulf_data_Statsbomb")
